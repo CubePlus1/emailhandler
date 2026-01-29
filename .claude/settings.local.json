@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-react-app:*)",
+      "Bash(npm install tailwindcss postcss autoprefixer react-router-dom axios @headlessui/react @heroicons/react dompurify)",
+      "Bash(npm install -D @types/dompurify)",
+      "Bash(npx tailwindcss init:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

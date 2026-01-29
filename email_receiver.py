@@ -7,14 +7,30 @@ import json
 import os
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template_string
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from dotenv import load_dotenv
 
+load_dotenv()
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///emails.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# 存储邮件和链接
-emails = []
-verification_links = []
+# Import models after app config
+from emailhandler.models import Base, Mailbox, Email, Attachment
+
+# Initialize SQLAlchemy with Base
+db = SQLAlchemy(model_class=Base)
+db.init_app(app)
+
+# Initialize CORS
+CORS(app, origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(','))
+
+# Create tables
+with app.app_context():
+    db.create_all()
 
 
 def extract_verification_link(html_content):
@@ -58,10 +74,13 @@ def index():
 @app.route('/status')
 def status():
     """服务状态"""
+    emails_count = db.session.query(Email).count()
+    links_count = db.session.query(Email).filter(Email.verification_link.isnot(None)).count()
+
     return jsonify({
         'status': 'running',
-        'emails_count': len(emails),
-        'links_count': len(verification_links),
+        'emails_count': emails_count,
+        'links_count': links_count,
         'timestamp': datetime.now().isoformat()
     })
 
@@ -71,39 +90,49 @@ def receive_email():
     """接收邮件（从 Cloudflare Worker 或其他来源）"""
     try:
         data = request.get_json() or {}
-        
+
         # 提取邮件信息
-        email_data = {
-            'timestamp': datetime.now().isoformat(),
-            'from': data.get('from', 'unknown'),
-            'to': data.get('to', 'unknown'),
-            'subject': data.get('subject', 'No Subject'),
-            'html': data.get('html', ''),
-            'text': data.get('text', ''),
-        }
-        
+        from_address = data.get('from', 'unknown')
+        to_address = data.get('to', 'unknown')
+        subject = data.get('subject', 'No Subject')
+        html_body = data.get('html', '')
+        text_body = data.get('text', '')
+
         # 提取验证链接
-        html_content = email_data['html'] or email_data['text']
+        html_content = html_body or text_body
         verification_link = extract_verification_link(html_content)
-        
-        if verification_link:
-            email_data['verification_link'] = verification_link
-            verification_links.append({
-                'link': verification_link,
-                'subject': email_data['subject'],
-                'from': email_data['from'],
-                'timestamp': email_data['timestamp']
-            })
-        
-        emails.append(email_data)
-        
+
+        # 确保邮箱存在
+        mailbox = db.session.query(Mailbox).filter_by(email=to_address).first()
+        if not mailbox:
+            mailbox = Mailbox(email=to_address)
+            db.session.add(mailbox)
+            db.session.flush()  # Get mailbox.id
+
+        # 创建邮件记录
+        email = Email(
+            mailbox_id=mailbox.id,
+            message_id=data.get('message_id', f"{datetime.now().timestamp()}@emailhandler"),
+            from_address=from_address,
+            to_address=to_address,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            verification_link=verification_link,
+            received_at=datetime.utcnow()
+        )
+
+        db.session.add(email)
+        db.session.commit()
+
         return jsonify({
             'success': True,
             'message': '邮件已接收',
             'verification_link': verification_link
         }), 200
-    
+
     except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
             'message': str(e)
@@ -113,16 +142,19 @@ def receive_email():
 @app.route('/verification_link')
 def get_verification_link():
     """获取最新的验证链接"""
-    if verification_links:
-        link_data = verification_links[-1]
+    email = db.session.query(Email).filter(
+        Email.verification_link.isnot(None)
+    ).order_by(Email.received_at.desc()).first()
+
+    if email:
         return jsonify({
             'success': True,
-            'link': link_data['link'],
-            'subject': link_data['subject'],
-            'from': link_data.get('from', ''),
-            'timestamp': link_data['timestamp']
+            'link': email.verification_link,
+            'subject': email.subject,
+            'from': email.from_address,
+            'timestamp': email.received_at.isoformat()
         }), 200
-    
+
     return jsonify({
         'success': False,
         'message': '暂无验证链接'
@@ -132,24 +164,50 @@ def get_verification_link():
 @app.route('/emails')
 def get_emails():
     """查看所有邮件"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+
+    pagination = db.session.query(Email).order_by(
+        Email.received_at.desc()
+    ).paginate(page=page, per_page=per_page, error_out=False)
+
+    emails_list = [{
+        'timestamp': email.received_at.isoformat(),
+        'from': email.from_address,
+        'to': email.to_address,
+        'subject': email.subject,
+        'html': email.html_body,
+        'text': email.text_body,
+        'verification_link': email.verification_link
+    } for email in pagination.items]
+
     return jsonify({
-        'count': len(emails),
-        'emails': emails
+        'count': pagination.total,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': pagination.pages,
+        'emails': emails_list
     }), 200
 
 
 @app.route('/clear', methods=['POST'])
 def clear_data():
     """清空所有数据"""
-    global emails, verification_links
-    
-    emails = []
-    verification_links = []
-    
-    return jsonify({
-        'success': True,
-        'message': '数据已清空'
-    }), 200
+    try:
+        db.session.query(Email).delete()
+        db.session.query(Mailbox).delete()
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': '数据已清空'
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
 
 
 def run_server(host='127.0.0.1', port=5000, debug=False):

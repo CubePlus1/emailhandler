@@ -1,0 +1,15 @@
+Generic single-database configuration for Alembic migrations.
+
+This directory contains database migration scripts for the emailhandler project.
+
+To run migrations:
+    alembic upgrade head
+
+To create a new migration:
+    alembic revision --autogenerate -m "description"
+
+To downgrade:
+    alembic downgrade -1
+
+For more information, see the Alembic documentation:
+https://alembic.sqlalchemy.org/

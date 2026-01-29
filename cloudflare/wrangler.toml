@@ -1,0 +1,24 @@
+name = "emailhandler-worker"
+main = "worker.js"
+compatibility_date = "2023-01-01"
+
+# Environment variables
+# Set these using: wrangler secret put FLASK_API_URL
+# Set these using: wrangler secret put WEBHOOK_SECRET
+[vars]
+# FLASK_API_URL = "https://your-flask-api.com"
+# WEBHOOK_SECRET = "your-secret-key"
+
+# Email routing configuration
+# Configure email routing in Cloudflare Dashboard:
+# 1. Go to Email Routing
+# 2. Add destination address
+# 3. Add routing rule to forward to this worker
+
+# Development configuration
+[env.development]
+# FLASK_API_URL = "http://localhost:5000"
+
+# Production configuration
+[env.production]
+# FLASK_API_URL = "https://your-production-api.com"
