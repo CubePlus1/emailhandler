@@ -1,0 +1,178 @@
+{
+  "project": "EmailHandler v3.0 架构文档与学习指南",
+  "branchName": "ralph/documentation",
+  "description": "创建完整的代码架构文档和后端学习文档，帮助理解整个系统的设计和实现细节",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "编写系统架构总览文档",
+      "description": "作为开发者，我需要一份系统架构总览文档，以便快速理解项目的整体设计和技术栈。",
+      "acceptanceCriteria": [
+        "创建 docs/ARCHITECTURE.md 文件",
+        "包含系统架构图（ASCII 或 Mermaid）",
+        "说明三层架构：数据层、业务层、API 层",
+        "列出技术栈和依赖关系",
+        "说明数据流向：Cloudflare Worker → Flask API → Database",
+        "文档清晰易读，包含目录索引"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "US-002",
+      "title": "编写数据库模型详解文档",
+      "description": "作为开发者，我需要理解数据库模型的设计，以便了解数据存储结构和关系。",
+      "acceptanceCriteria": [
+        "创建 docs/DATABASE.md 文件",
+        "详细说明三个模型：Mailbox、Email、Attachment",
+        "列出每个字段的用途和约束",
+        "说明表之间的关系（外键、级联删除）",
+        "包含 ER 图（Entity Relationship Diagram）",
+        "解释索引设计（idx_emails_mailbox、idx_emails_folder 等）",
+        "说明 verification_link 字段的遗留兼容性"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "US-003",
+      "title": "编写 API 路由模块学习指南",
+      "description": "作为开发者，我需要理解 backend/api/routes.py 的实现逻辑，以便学习 RESTful API 设计。",
+      "acceptanceCriteria": [
+        "创建 docs/API_ROUTES.md 文件",
+        "逐个解释 5 个 API 端点的功能和实现",
+        "说明 Blueprint 蓝图模式的作用",
+        "解释数据库查询方法（db.session.query）",
+        "说明错误处理和事务管理（rollback）",
+        "包含请求/响应示例",
+        "说明搜索功能的 LIKE 查询实现"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "US-004",
+      "title": "编写 Webhook 处理模块学习指南",
+      "description": "作为开发者，我需要理解 backend/api/webhooks.py 的 Webhook 认证和邮件处理逻辑。",
+      "acceptanceCriteria": [
+        "创建 docs/WEBHOOKS.md 文件",
+        "解释 Webhook 认证机制（X-Webhook-Secret）",
+        "说明邮件接收流程：验证 → 提取 → 存储",
+        "详细说明 extract_verification_link 的正则匹配逻辑",
+        "解释 Mailbox 自动创建逻辑（如果不存在）",
+        "说明 db.session.flush() 的作用",
+        "包含 Cloudflare Worker 调用示例"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "US-005",
+      "title": "编写 Flask 应用主程序学习指南",
+      "description": "作为开发者，我需要理解 email_receiver.py 的初始化流程和蓝图注册机制。",
+      "acceptanceCriteria": [
+        "创建 docs/FLASK_APP.md 文件",
+        "解释 Flask 应用初始化过程",
+        "说明配置加载（dotenv、环境变量）",
+        "解释 SQLAlchemy 初始化（model_class=Base）",
+        "说明 CORS 跨域配置",
+        "解释蓝图注册机制（api_bp、webhook_bp）",
+        "说明 db.create_all() 的表创建时机",
+        "解释旧版兼容端点（/verification_link、/emails）"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "US-006",
+      "title": "编写工具函数模块学习指南",
+      "description": "作为开发者，我需要理解 backend/api/utils.py 的验证链接提取算法。",
+      "acceptanceCriteria": [
+        "创建 docs/UTILS.md 文件",
+        "详细解释 extract_verification_link 函数",
+        "说明 5 个正则表达式模式的匹配逻辑",
+        "解释为什么按顺序尝试多个模式",
+        "包含匹配示例（成功和失败的情况）",
+        "说明函数返回 None 的场景"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "US-007",
+      "title": "编写依赖管理和环境配置指南",
+      "description": "作为开发者，我需要理解项目的依赖管理和环境变量配置。",
+      "acceptanceCriteria": [
+        "创建 docs/DEPENDENCIES.md 文件",
+        "逐个解释 requirements.txt 中的依赖用途",
+        "说明 Flask、SQLAlchemy、Alembic 的版本选择",
+        "解释可选依赖（gunicorn、psycopg2-binary）",
+        "创建 docs/ENVIRONMENT.md 文件",
+        "详细说明所有环境变量（DATABASE_URL、WEBHOOK_SECRET 等）",
+        "包含开发和生产环境的配置示例"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "US-008",
+      "title": "编写数据流和请求生命周期文档",
+      "description": "作为开发者，我需要理解一个邮件从接收到存储的完整生命周期。",
+      "acceptanceCriteria": [
+        "创建 docs/DATA_FLOW.md 文件",
+        "绘制完整的数据流图（Mermaid 或 ASCII）",
+        "说明邮件接收的 8 个步骤",
+        "解释每一步的代码位置（文件:行号）",
+        "说明错误处理和回滚机制",
+        "包含时序图（Sequence Diagram）"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "US-009",
+      "title": "编写代码风格和最佳实践指南",
+      "description": "作为开发者，我需要理解代码中使用的设计模式和最佳实践。",
+      "acceptanceCriteria": [
+        "创建 docs/BEST_PRACTICES.md 文件",
+        "说明 Blueprint 蓝图模式的优势",
+        "解释为什么使用 current_app.extensions['sqlalchemy']",
+        "说明事务管理的最佳实践（commit/rollback）",
+        "解释模型定义的类型注解（Mapped）",
+        "说明 relationship 的 cascade 参数作用",
+        "包含常见陷阱和注意事项"
+      ],
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "US-010",
+      "title": "创建快速参考和 FAQ 文档",
+      "description": "作为开发者，我需要一个快速参考手册，以便查找常见问题和解决方案。",
+      "acceptanceCriteria": [
+        "创建 docs/QUICK_REFERENCE.md 文件",
+        "列出所有 API 端点的速查表",
+        "包含数据库模型字段速查表",
+        "创建 docs/FAQ.md 文件",
+        "回答 10 个常见问题（如何添加新端点、如何修改模型等）",
+        "包含故障排查指南"
+      ],
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "US-011",
+      "title": "创建文档总索引和导航",
+      "description": "作为开发者，我需要一个文档总索引，以便快速找到需要的文档。",
+      "acceptanceCriteria": [
+        "创建 docs/README.md 作为文档入口",
+        "列出所有文档的链接和简介",
+        "按学习路径组织（新手 → 进阶 → 高级）",
+        "包含文档地图（Document Map）",
+        "所有文档互相链接，形成文档网络"
+      ],
+      "priority": 1,
+      "passes": false
+    }
+  ]
+}

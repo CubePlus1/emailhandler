@@ -22,43 +22,33 @@ def upgrade() -> None:
     # Create mailboxes table
     op.create_table('mailboxes',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('name', sa.String(), nullable=False),
-        sa.Column('imap_host', sa.String(), nullable=False),
-        sa.Column('imap_port', sa.Integer(), nullable=False),
-        sa.Column('imap_username', sa.String(), nullable=False),
-        sa.Column('imap_password', sa.String(), nullable=False),
-        sa.Column('smtp_host', sa.String(), nullable=True),
-        sa.Column('smtp_port', sa.Integer(), nullable=True),
-        sa.Column('smtp_username', sa.String(), nullable=True),
-        sa.Column('smtp_password', sa.String(), nullable=True),
-        sa.Column('enabled', sa.Boolean(), nullable=True),
-        sa.PrimaryKeyConstraint('id')
+        sa.Column('email', sa.String(length=255), nullable=False),
+        sa.Column('display_name', sa.String(length=255), nullable=True),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.PrimaryKeyConstraint('id'),
+        sa.UniqueConstraint('email')
     )
-    op.create_index(op.f('ix_mailboxes_id'), 'mailboxes', ['id'], unique=False)
-    op.create_index(op.f('ix_mailboxes_name'), 'mailboxes', ['name'], unique=True)
 
     # Create emails table
     op.create_table('emails',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('mailbox_id', sa.Integer(), nullable=False),
-        sa.Column('uid', sa.String(), nullable=False),
-        sa.Column('folder', sa.String(), nullable=False),
-        sa.Column('message_id', sa.String(), nullable=True),
-        sa.Column('subject', sa.String(), nullable=True),
-        sa.Column('sender', sa.String(), nullable=True),
-        sa.Column('recipient', sa.String(), nullable=True),
-        sa.Column('cc', sa.String(), nullable=True),
-        sa.Column('bcc', sa.String(), nullable=True),
-        sa.Column('body', sa.Text(), nullable=True),
+        sa.Column('message_id', sa.String(length=255), nullable=False),
+        sa.Column('from_address', sa.String(length=255), nullable=False),
+        sa.Column('to_address', sa.String(length=255), nullable=False),
+        sa.Column('subject', sa.String(length=500), nullable=True),
         sa.Column('html_body', sa.Text(), nullable=True),
-        sa.Column('received_at', sa.DateTime(), nullable=True),
-        sa.Column('flags', sa.String(), nullable=True),
+        sa.Column('text_body', sa.Text(), nullable=True),
+        sa.Column('is_read', sa.Boolean(), nullable=False, server_default='false'),
+        sa.Column('is_starred', sa.Boolean(), nullable=False, server_default='false'),
+        sa.Column('folder', sa.String(length=50), nullable=False, server_default='inbox'),
+        sa.Column('received_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column('verification_link', sa.String(length=1000), nullable=True),
         sa.Column('raw_headers', sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(['mailbox_id'], ['mailboxes.id'], ),
         sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('mailbox_id', 'uid', 'folder', name='_mailbox_uid_folder_uc')
+        sa.UniqueConstraint('message_id')
     )
-    op.create_index(op.f('ix_emails_id'), 'emails', ['id'], unique=False)
     op.create_index('idx_emails_mailbox', 'emails', ['mailbox_id'], unique=False)
     op.create_index('idx_emails_folder', 'emails', ['folder'], unique=False)
     op.create_index('idx_emails_received', 'emails', ['received_at'], unique=False)
@@ -67,71 +57,124 @@ def upgrade() -> None:
     op.create_table('attachments',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('email_id', sa.Integer(), nullable=False),
-        sa.Column('filename', sa.String(), nullable=True),
-        sa.Column('content_type', sa.String(), nullable=True),
-        sa.Column('size', sa.Integer(), nullable=True),
-        sa.Column('content', sa.LargeBinary(), nullable=True),
+        sa.Column('filename', sa.String(length=255), nullable=False),
+        sa.Column('content_type', sa.String(length=100), nullable=False),
+        sa.Column('size', sa.Integer(), nullable=False),
+        sa.Column('storage_path', sa.String(length=500), nullable=False),
         sa.ForeignKeyConstraint(['email_id'], ['emails.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_attachments_id'), 'attachments', ['id'], unique=False)
 
-    # Create FTS5 virtual table for emails
-    op.execute("""
-        CREATE VIRTUAL TABLE emails_fts USING fts5(
-            subject,
-            sender,
-            recipient,
-            body,
-            content='emails',
-            content_rowid='id'
-        )
-    """)
+    # Create full-text search support based on database type
+    bind = op.get_bind()
+    dialect = bind.dialect.name
 
-    # Create triggers to keep FTS5 table in sync
-    op.execute("""
-        CREATE TRIGGER emails_ai AFTER INSERT ON emails BEGIN
-            INSERT INTO emails_fts(rowid, subject, sender, recipient, body)
-            VALUES (new.id, new.subject, new.sender, new.recipient, new.body);
-        END
-    """)
+    if dialect == 'sqlite':
+        # SQLite: Use FTS5 virtual table
+        op.execute("""
+            CREATE VIRTUAL TABLE emails_fts USING fts5(
+                subject,
+                from_address,
+                to_address,
+                text_body,
+                content='emails',
+                content_rowid='id'
+            )
+        """)
 
-    op.execute("""
-        CREATE TRIGGER emails_ad AFTER DELETE ON emails BEGIN
-            INSERT INTO emails_fts(emails_fts, rowid, subject, sender, recipient, body)
-            VALUES('delete', old.id, old.subject, old.sender, old.recipient, old.body);
-        END
-    """)
+        # Create triggers to keep FTS5 table in sync
+        op.execute("""
+            CREATE TRIGGER emails_ai AFTER INSERT ON emails BEGIN
+                INSERT INTO emails_fts(rowid, subject, from_address, to_address, text_body)
+                VALUES (new.id, new.subject, new.from_address, new.to_address, new.text_body);
+            END
+        """)
 
-    op.execute("""
-        CREATE TRIGGER emails_au AFTER UPDATE ON emails BEGIN
-            INSERT INTO emails_fts(emails_fts, rowid, subject, sender, recipient, body)
-            VALUES('delete', old.id, old.subject, old.sender, old.recipient, old.body);
-            INSERT INTO emails_fts(rowid, subject, sender, recipient, body)
-            VALUES (new.id, new.subject, new.sender, new.recipient, new.body);
-        END
-    """)
+        op.execute("""
+            CREATE TRIGGER emails_ad AFTER DELETE ON emails BEGIN
+                INSERT INTO emails_fts(emails_fts, rowid, subject, from_address, to_address, text_body)
+                VALUES('delete', old.id, old.subject, old.from_address, old.to_address, old.text_body);
+            END
+        """)
+
+        op.execute("""
+            CREATE TRIGGER emails_au AFTER UPDATE ON emails BEGIN
+                INSERT INTO emails_fts(emails_fts, rowid, subject, from_address, to_address, text_body)
+                VALUES('delete', old.id, old.subject, old.from_address, old.to_address, old.text_body);
+                INSERT INTO emails_fts(rowid, subject, from_address, to_address, text_body)
+                VALUES (new.id, new.subject, new.from_address, new.to_address, new.text_body);
+            END
+        """)
+
+    elif dialect == 'postgresql':
+        # PostgreSQL: Use tsvector and GIN index
+        # Add tsvector column for full-text search
+        op.add_column('emails', sa.Column('search_vector', sa.dialects.postgresql.TSVECTOR(), nullable=True))
+
+        # Create GIN index for fast full-text search
+        op.execute("""
+            CREATE INDEX idx_emails_search_vector ON emails USING GIN(search_vector)
+        """)
+
+        # Create function to update search vector
+        op.execute("""
+            CREATE OR REPLACE FUNCTION emails_search_vector_update() RETURNS trigger AS $$
+            BEGIN
+                NEW.search_vector :=
+                    setweight(to_tsvector('english', COALESCE(NEW.subject, '')), 'A') ||
+                    setweight(to_tsvector('english', COALESCE(NEW.from_address, '')), 'B') ||
+                    setweight(to_tsvector('english', COALESCE(NEW.to_address, '')), 'B') ||
+                    setweight(to_tsvector('english', COALESCE(NEW.text_body, '')), 'C');
+                RETURN NEW;
+            END
+            $$ LANGUAGE plpgsql;
+        """)
+
+        # Create trigger to auto-update search vector
+        op.execute("""
+            CREATE TRIGGER emails_search_vector_trigger
+            BEFORE INSERT OR UPDATE ON emails
+            FOR EACH ROW
+            EXECUTE FUNCTION emails_search_vector_update();
+        """)
+
+        # Update existing rows (if any)
+        op.execute("""
+            UPDATE emails SET search_vector =
+                setweight(to_tsvector('english', COALESCE(subject, '')), 'A') ||
+                setweight(to_tsvector('english', COALESCE(from_address, '')), 'B') ||
+                setweight(to_tsvector('english', COALESCE(to_address, '')), 'B') ||
+                setweight(to_tsvector('english', COALESCE(text_body, '')), 'C')
+        """)
 
 
 def downgrade() -> None:
-    # Drop FTS5 triggers
-    op.execute("DROP TRIGGER IF EXISTS emails_au")
-    op.execute("DROP TRIGGER IF EXISTS emails_ad")
-    op.execute("DROP TRIGGER IF EXISTS emails_ai")
+    # Drop full-text search based on database type
+    bind = op.get_bind()
+    dialect = bind.dialect.name
 
-    # Drop FTS5 virtual table
-    op.execute("DROP TABLE IF EXISTS emails_fts")
+    if dialect == 'sqlite':
+        # Drop FTS5 triggers
+        op.execute("DROP TRIGGER IF EXISTS emails_au")
+        op.execute("DROP TRIGGER IF EXISTS emails_ad")
+        op.execute("DROP TRIGGER IF EXISTS emails_ai")
+
+        # Drop FTS5 virtual table
+        op.execute("DROP TABLE IF EXISTS emails_fts")
+
+    elif dialect == 'postgresql':
+        # Drop PostgreSQL full-text search
+        op.execute("DROP TRIGGER IF EXISTS emails_search_vector_trigger ON emails")
+        op.execute("DROP FUNCTION IF EXISTS emails_search_vector_update()")
+        op.execute("DROP INDEX IF EXISTS idx_emails_search_vector")
+        op.drop_column('emails', 'search_vector')
 
     # Drop regular tables
-    op.drop_index(op.f('ix_attachments_id'), table_name='attachments')
     op.drop_table('attachments')
 
     op.drop_index('idx_emails_received', table_name='emails')
     op.drop_index('idx_emails_folder', table_name='emails')
     op.drop_index('idx_emails_mailbox', table_name='emails')
-    op.drop_index(op.f('ix_emails_id'), table_name='emails')
     op.drop_table('emails')
 
-    op.drop_index(op.f('ix_mailboxes_name'), table_name='mailboxes')
-    op.drop_index(op.f('ix_mailboxes_id'), table_name='mailboxes')
     op.drop_table('mailboxes')

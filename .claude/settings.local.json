@@ -5,7 +5,17 @@
       "Bash(npm install tailwindcss postcss autoprefixer react-router-dom axios @headlessui/react @heroicons/react dompurify)",
       "Bash(npm install -D @types/dompurify)",
       "Bash(npx tailwindcss init:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(python:*)",
+      "Bash(if not exist .gitignore echo .env)",
+      "Bash(findstr:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(where:*)",
+      "Bash(\"C:\\\\Program Files\\\\PostgreSQL\\\\16\\\\bin\\\\psql.exe\" -U postgres -c:*)",
+      "Bash(\"C:\\\\Program Files\\\\PostgreSQL\\\\15\\\\bin\\\\psql.exe\":*)",
+      "Bash(curl:*)",
+      "Bash(dir:*)",
+      "Bash(if not exist docs mkdir docs)"
     ]
   }
 }

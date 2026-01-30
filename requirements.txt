@@ -1,0 +1,25 @@
+# EmailHandler v3.0 - Python Dependencies
+
+# Core Framework
+flask>=3.1.2,<4
+flask-sqlalchemy>=3.0,<4
+flask-cors>=4.0,<5
+
+# Database
+sqlalchemy>=2.0,<3
+alembic>=1.13,<2
+
+# Authentication (for future use)
+pyjwt>=2.8,<3
+
+# HTTP Client
+requests>=2.31.0
+
+# Environment Variables
+python-dotenv>=1.0,<2
+
+# Production Server (optional)
+gunicorn>=21.0,<22
+
+# PostgreSQL Support (optional)
+psycopg2-binary>=2.9,<3

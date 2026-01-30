@@ -44,3 +44,4 @@ temp/
 # Email data
 emails.json
 links.json
+.env
