@@ -45,3 +45,35 @@ temp/
 emails.json
 links.json
 .env
+*.eml
+*.msg
+*.pst
+*.ost
+
+# AI assistant working files
+.omc/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets and credentials
+*.key
+*.pem
+*.crt
+secrets.json
+config.local.*
+
+# Local development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Node modules (for frontend)
+node_modules/
+
+# Python cache
+*.pyc
+__pycache__/
